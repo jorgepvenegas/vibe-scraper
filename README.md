@@ -1,4 +1,4 @@
-# Asistencia C�mara - Web Scraping API
+# vibe-scraper
 
 A modern FastAPI-based web scraping service that supports both static and dynamic content extraction. The API intelligently handles JavaScript-rendered pages through Playwright while offering lightweight HTTP-based scraping for static content.
 
@@ -27,7 +27,7 @@ A modern FastAPI-based web scraping service that supports both static and dynami
 1. **Clone/navigate to project**:
 
 ```bash
-cd asistencia-camara
+cd vibe-scraper
 ```
 
 2. **Create and activate virtual environment** (using uv):
@@ -199,6 +199,7 @@ Main scraping endpoint.
 **Extraction Configuration:**
 
 When using `extract`, you can configure:
+
 - `selector` (string, required): CSS selector for element to extract
 - `attribute` (string, optional): HTML attribute to extract (e.g., `href`, `src`). If `null`, extracts text content or full HTML
 - `multiple` (boolean, default: false): Extract all matching elements
@@ -207,6 +208,7 @@ When using `extract`, you can configure:
 - `strip` (boolean, default: false): **HTML output only**. If true, removes all HTML attributes (class, id, style, onclick, etc.), scripts, and styles. Keeps only tag structure and text content
 
 **Example with dynamic element waiting:**
+
 ```bash
 curl -X POST "http://localhost:8000/scrape" \
   -H "Content-Type: application/json" \
@@ -226,6 +228,7 @@ curl -X POST "http://localhost:8000/scrape" \
 ```
 
 **Example with HTML stripping:**
+
 ```bash
 curl -X POST "http://localhost:8000/scrape" \
   -H "Content-Type: application/json" \
@@ -285,8 +288,8 @@ curl -X POST "http://localhost:8000/scrape" \
   "data": {
     "content": "<table>...</table>",
     "parsed": [
-      {"Name": "John", "Age": "30", "City": "New York"},
-      {"Name": "Jane", "Age": "25", "City": "Los Angeles"}
+      { "Name": "John", "Age": "30", "City": "New York" },
+      { "Name": "Jane", "Age": "25", "City": "Los Angeles" }
     ],
     "table_metadata": {
       "rows_parsed": 2,
@@ -375,6 +378,7 @@ The API will detect merged cells and include metadata: `has_merged_cells: true`.
 ```
 
 **Error Response (when selector doesn't match):**
+
 ```json
 {
   "success": false,
@@ -397,6 +401,7 @@ The API will detect merged cells and include metadata: `has_merged_cells: true`.
 ```
 
 **Notes on response:**
+
 - When an extraction selector is provided, `data.html` is set to `null` to reduce response size (use `data.content` for extracted HTML)
 - `metadata.extraction_debug` shows selector matching information and helps debug extraction issues
 - If the selector doesn't match any elements, `success` is `false` and `error` contains helpful suggestions
