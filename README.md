@@ -12,6 +12,8 @@ A modern FastAPI-based web scraping service that supports both static and dynami
 - **Content extraction**: CSS selector-based content extraction with single or multiple element support
 - **Table parsing**: Extract HTML tables into structured JSON arrays with support for merged cells, nested tables, and custom selectors
 - **HTML cleaning**: Strip attributes, scripts, and styles while preserving semantic structure
+- **Data persistence**: Optional MongoDB storage for scrape results with queryable history
+- **Dashboard-ready**: Query and aggregate stored scrapes for analytics and monitoring
 - **Async-first**: Built with async/await for high performance
 - **Production-ready**: Comprehensive error handling and resource management
 
@@ -428,17 +430,165 @@ Health check endpoint.
 
 Root endpoint with API information.
 
+#### GET /scrapes/{scrape_id}
+
+Retrieve a stored scrape result by ID (requires persistence enabled).
+
+**Parameters:**
+
+- `scrape_id` (string): The unique ID of the stored scrape
+
+**Response:**
+
+```json
+{
+  "scrape_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request": {
+    "url": "https://example.com",
+    "mode": "dynamic",
+    "actions": [...],
+    "extract": {...}
+  },
+  "content": {
+    "extracted_text": "Page content",
+    "title": "Page Title",
+    "final_url": "https://example.com",
+    "parsed_table": [{...}],
+    "table_metadata": {...}
+  },
+  "metadata": {
+    "scrape_mode": "dynamic",
+    "duration_ms": 1234,
+    "timestamp": "2025-12-10T10:00:00Z",
+    "success": true,
+    "error": null
+  },
+  "created_at": "2025-12-10T10:00:00Z",
+  "updated_at": "2025-12-10T10:00:00Z"
+}
+```
+
+#### GET /scrapes/
+
+Query stored scrape results with filters (requires persistence enabled).
+
+**Parameters:**
+
+- `url` (string, optional): Filter by URL
+- `mode` (string, optional): Filter by scrape mode (`static` or `dynamic`)
+- `success` (boolean, optional): Filter by success status
+- `from_date` (datetime, optional): Filter scrapes from this date
+- `to_date` (datetime, optional): Filter scrapes until this date
+- `limit` (integer, default: 50, max: 100): Maximum results to return
+- `offset` (integer, default: 0): Number of results to skip
+
+**Example:**
+
+```bash
+# Get recent scrapes for a URL
+curl "http://localhost:8000/scrapes?url=https://example.com&limit=10"
+
+# Get successful dynamic scrapes from last 7 days
+curl "http://localhost:8000/scrapes?mode=dynamic&success=true&from_date=2025-12-03&to_date=2025-12-10"
+```
+
+**Response:**
+
+```json
+{
+  "total": 150,
+  "limit": 50,
+  "offset": 0,
+  "results": [
+    {
+      "scrape_id": "550e8400-e29b-41d4-a716-446655440000",
+      "request": {...},
+      "content": {...},
+      "metadata": {...},
+      "created_at": "2025-12-10T10:00:00Z",
+      "updated_at": "2025-12-10T10:00:00Z"
+    },
+    ...
+  ]
+}
+```
+
+#### GET /scrapes/stats/summary
+
+Get aggregated statistics for dashboard (requires persistence enabled).
+
+**Parameters:**
+
+- `from_date` (datetime, required): Start date for statistics
+- `to_date` (datetime, required): End date for statistics
+
+**Example:**
+
+```bash
+curl "http://localhost:8000/scrapes/stats/summary?from_date=2025-12-01&to_date=2025-12-31"
+```
+
+**Response:**
+
+```json
+{
+  "statistics": [
+    {
+      "_id": {
+        "mode": "dynamic",
+        "success": true
+      },
+      "count": 120,
+      "avg_duration": 2345
+    },
+    {
+      "_id": {
+        "mode": "static",
+        "success": true
+      },
+      "count": 850,
+      "avg_duration": 234
+    }
+  ]
+}
+```
+
 ## Configuration
 
+### Environment Variables
+
+Use a `.env` file to configure the application (see `.env.example` for template):
+
+```bash
+# MongoDB Persistence (optional)
+ENABLE_PERSISTENCE=true
+MONGODB_URL=mongodb://localhost:27017
+MONGODB_DATABASE=scraper_db
+
+# Scraper Settings
+PLAYWRIGHT_TIMEOUT=30000
+HTTP_TIMEOUT=30.0
+
+# Features
+ENABLE_SCREENSHOTS=true
+```
+
+**MongoDB Configuration:**
+
+- `ENABLE_PERSISTENCE` (default: `false`): Enable/disable scrape result storage
+- `MONGODB_URL` (default: `mongodb://localhost:27017`): MongoDB connection string
+- `MONGODB_DATABASE` (default: `scraper_db`): Database name for storing scrapes
+
+**Key Features:**
+
+- Persistence is **optional** - API works fine without MongoDB
+- Storage doesn't block scraping - happens asynchronously
+- If MongoDB connection fails, app continues without persistence
+- Perfect for building dashboards and analytics
+
+### Programmatic Settings
+
 Edit `src/config.py` to customize:
-
-- **Timeouts**: HTTP and browser timeouts
-- **User Agent**: Custom User-Agent strings
-- **Browser settings**: Playwright launch arguments
-- **Feature toggles**: Enable/disable static or dynamic scraping
-- **Security**: URL validation rules
-
-Key settings:
 
 ```python
 # HTTP timeouts (seconds)
@@ -451,6 +601,11 @@ PLAYWRIGHT_TIMEOUT = 30000
 ENABLE_SCREENSHOTS = True
 ENABLE_STATIC_MODE = True
 ENABLE_DYNAMIC_MODE = True
+
+# MongoDB Settings
+ENABLE_PERSISTENCE = False  # Set to True to enable
+MONGODB_URL = "mongodb://localhost:27017"
+MONGODB_DATABASE = "scraper_db"
 ```
 
 ## Development
@@ -459,21 +614,26 @@ ENABLE_DYNAMIC_MODE = True
 
 ```
 src/
-   main.py                 # FastAPI application
-   config.py              # Configuration
-   api/
-      routes.py          # API endpoints
-   models/
-      schemas.py         # Pydantic models
-   scrapers/
-      base.py            # Base scraper interface
-      static.py          # Static scraper (httpx + BeautifulSoup)
-      dynamic.py         # Dynamic scraper (Playwright)
-   services/
-       scraper_service.py # Scraper orchestration
-
+  main.py                 # FastAPI application
+  config.py               # Configuration
+  api/
+    routes.py                # Main scraping endpoints
+    scrape_history_routes.py # Scrape history query endpoints
+    models/
+      schemas.py          # Pydantic models
+    scrapers/
+      base.py             # Base scraper interface
+      static.py           # Static scraper (httpx + BeautifulSoup)
+      dynamic.py          # Dynamic scraper (Playwright)
+      table_parser.py     # HTML table parsing
+    services/
+      scraper_service.py # Scraper orchestration
+   database/
+      mongodb.py         # MongoDB connection manager
+   repositories/
+      scrape_repository.py # Data access layer for scrapes
 tests/
-   test_api.py           # API tests
+  test_api.py           # API tests
 ```
 
 ### Running Tests
@@ -514,6 +674,22 @@ mypy src/
 - Request validation
 - Error handling and recovery
 - Resource cleanup
+
+### Data Persistence (Optional)
+
+When `ENABLE_PERSISTENCE=true`, `ScraperService` stores results to MongoDB via `ScrapeRepository`:
+
+- **Automatic storage**: Results stored after every successful scrape
+- **Non-blocking**: Storage happens asynchronously, doesn't affect response time
+- **Graceful degradation**: If MongoDB is unavailable, scraping continues normally
+- **Dashboard-ready**: Query API provides filtering, aggregation, and statistics
+
+The repository layer provides:
+
+- CRUD operations for scrape documents
+- Complex filtering by URL, mode, date range, success status
+- Aggregation pipelines for analytics and reporting
+- Indexed queries optimized for dashboard use cases
 
 ## Error Handling
 

@@ -1,5 +1,6 @@
 """Configuration settings for the web scraping API."""
 
+import os
 from typing import Optional
 
 
@@ -39,6 +40,19 @@ class Settings:
     ENABLE_SCREENSHOTS = True
     ENABLE_STATIC_MODE = True
     ENABLE_DYNAMIC_MODE = True
+
+    # MongoDB Settings
+    ENABLE_PERSISTENCE: bool = False
+    MONGODB_URL: str = "mongodb://localhost:27017"
+    MONGODB_DATABASE: str = "scraper_db"
+    STORE_SCREENSHOTS: bool = False
+    STORE_FULL_HTML: bool = False
+
+    def __init__(self):
+        """Initialize settings from environment variables."""
+        self.ENABLE_PERSISTENCE = os.getenv("ENABLE_PERSISTENCE", "false").lower() == "true"
+        self.MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+        self.MONGODB_DATABASE = os.getenv("MONGODB_DATABASE", "scraper_db")
 
 
 settings = Settings()

@@ -7,7 +7,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import router, scraper_service
+from src.api.scrape_history_routes import router as history_router
 from src.config import settings
+from src.database.mongodb import MongoDB
+from src.repositories.scrape_repository import ScrapeRepository
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -24,10 +27,34 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Application starting up...")
+
+    # Connect to MongoDB if persistence is enabled
+    if settings.ENABLE_PERSISTENCE:
+        try:
+            await MongoDB.connect(
+                settings.MONGODB_URL,
+                settings.MONGODB_DATABASE
+            )
+            await MongoDB.create_indexes()
+            logger.info("MongoDB connected successfully")
+
+            # Inject repository into scraper service
+            db = MongoDB.get_database()
+            repository = ScrapeRepository(db)
+            scraper_service.repository = repository
+
+        except Exception as e:
+            logger.error(f"MongoDB connection failed: {e}")
+            logger.warning("Continuing without persistence")
+
     yield
+
     # Shutdown
     logger.info("Application shutting down...")
     await scraper_service.cleanup()
+
+    if settings.ENABLE_PERSISTENCE:
+        await MongoDB.disconnect()
 
 
 # Create FastAPI app
@@ -49,6 +76,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router)
+app.include_router(history_router)
 
 
 @app.get("/")
